@@ -1,0 +1,546 @@
+# Load the package
+library(tidymodels)
+
+# Pick a model class
+tree_spec <- decision_tree() %>% 
+  # Set the engine
+  set_engine("rpart") %>% 
+  # Set the mode
+  set_mode('classification')
+# Print the result
+print(tree_spec)
+
+# Create the specification
+tree_spec <- decision_tree() %>% 
+  set_engine("rpart") %>% 
+  set_mode('classification')
+
+# Train the model
+tree_model_bmi <- tree_spec %>% 
+  fit(formula = outcome ~bmi, data = diabetes)
+
+# Print the model
+print(tree_model_bmi)
+
+# Create the split
+diabetes_split <- initial_split(diabetes, prop = 0.8)
+
+# Extract the training and test set
+diabetes_train <- training(diabetes_split)
+diabetes_test  <- testing(diabetes_split)
+
+# Verify the proportions of both sets
+round(nrow(diabetes_train) / nrow(diabetes), 2) == 0.80
+round(nrow(diabetes_test) / nrow(diabetes), 2) == 0.20
+
+# Preparation
+set.seed(9888)
+diabetes_split <- initial_split(diabetes, prop = 0.75)
+
+# Proportion of 'yes' outcomes in the training data
+counts_train <- table(training(diabetes_split)$outcome)
+prop_yes_train <- counts_train["yes"] / sum(counts_train)
+
+# Proportion of 'yes' outcomes in the test data
+counts_test <- table(testing(diabetes_split)$outcome)
+prop_yes_test <- counts_test["yes"] / sum(counts_test)
+
+paste("Proportion of positive outcomes in training set:", round(prop_yes_train, 2))
+paste("Proportion of positive outcomes in test set:", round(prop_yes_test, 2))
+
+# Create a split with a constant outcome distribution
+diabetes_split <- initial_split(diabetes, prop = 0.75, strata = outcome)
+
+# Proportion of 'yes' outcomes in the training data
+counts_train <- table(training(diabetes_split)$outcome)
+prop_yes_train <- counts_train["yes"] / sum(counts_train)
+
+# Proportion of 'yes' outcomes in the test data
+counts_test <- table(testing(diabetes_split)$outcome)
+prop_yes_test <- counts_test["yes"] / sum(counts_test)
+
+paste("Proportion of positive outcomes in training set:", round(prop_yes_train, 2))
+paste("Proportion of positive outcomes in test set:", round(prop_yes_test, 2))
+
+set.seed(9)
+
+# Create the balanced data split
+diabetes_split <- initial_split(diabetes, prop = 0.75, strata = outcome)
+
+# Build the specification of the model
+tree_spec <- decision_tree() %>% 
+  set_engine("rpart") %>% 
+  set_mode('classification')
+
+# Train the model
+model_trained <- tree_spec %>% 
+  fit(formula = outcome ~bmi + skin_thickness, data = training(diabetes_split))
+
+model_trained
+
+# Train your model
+model <- tree_spec %>% 
+  fit(formula = outcome ~., data = diabetes_train)
+
+# Generate predictions
+predictions <- predict(model,
+                   new_data = diabetes_test, type = "class")
+
+# Add the true outcomes
+predictions_combined <- predictions %>% 
+mutate(true_class = diabetes_test$outcome)
+
+# Print the first lines of the result
+print(head(predictions_combined))
+
+# The confusion matrix
+diabetes_matrix <- conf_mat(data = predictions_combined,
+                       estimate = .pred_class,
+                       truth = true_class)
+
+# Print the matrix
+print(diabetes_matrix)
+
+# The number of correctly predicted classes
+correct_predictions <- 75 + 34
+
+# The number of all predicted classes
+all_predictions <- 75 + 34 + 18 + 27
+
+# The accuracy calculated by hand
+acc_manual <- correct_predictions / all_predictions
+acc_manual
+
+# The accuracy calculated by a function
+acc_auto <- accuracy(predictions_combined,
+                estimate = .pred_class, 
+                truth = true_class)
+acc_auto$.estimate
+
+library(tidymodels)
+
+# Build the specification
+model_spec <- decision_tree() %>%
+  set_mode("regression") %>%
+  set_engine("rpart")
+
+# Fit to the data
+model_fit <- model_spec %>%
+  fit(formula = final_grade ~ cocoa_percent + review_date,
+      data = chocolate_train)
+
+model_fit
+
+# Train the model
+chocolate_model <- model_spec %>%
+  fit(formula = final_grade~., data = chocolate_train)
+
+# Predict new data
+predictions <- predict(chocolate_model, new_data = chocolate_test) %>%
+  # Add the test set
+  bind_cols(chocolate_test)
+
+predictions
+
+# Predict using the training set
+in_sample_predictions <- predict(model,
+                                 new_data = chocolate_train)
+
+# Calculate the vector of absolute differences
+abs_diffs <- abs(in_sample_predictions$.pred - chocolate_train$final_grade)
+
+# Calculate the mean absolute error
+1 / length(abs_diffs) * sum(abs_diffs)
+
+# Predict ratings on test set and add true grades
+test_enriched <- predict(model, new_data = chocolate_test) %>%
+    bind_cols(chocolate_test)
+    
+# Compute the mean absolute error using one single function
+mae(test_enriched,
+    estimate = .pred,
+    truth = final_grade)
+
+# Predict on and combine with training data and calculate the error
+predict(complex_model, new_data = chocolate_train) %>%
+	bind_cols(chocolate_train) %>% 
+	mae(estimate = .pred,
+    truth = final_grade)
+
+# Predict on and combine with test data and calculate the error
+predict(complex_model, new_data = chocolate_test) %>%
+	bind_cols(chocolate_test) %>% 
+	mae(estimate = .pred,
+        truth = final_grade)
+# Calculate the squared differences
+squared_diffs <- (test_enriched$final_grade - test_enriched$.pred)^2
+
+# Compute the RMSE using the formula
+rmse_manual <- sqrt(1 / length(squared_diffs) * sum(squared_diffs))
+
+# Compute the RMSE using a function
+rmse_auto <- rmse(test_enriched,
+                  estimate = .pred,
+                  truth = final_grade)
+
+# Print both errors
+rmse_manual
+rmse_auto
+
+# Set seed for reproducibility
+set.seed(20)
+
+# Build 10 folds
+chocolate_folds <- vfold_cv(chocolate_train, v = 10)
+
+print(chocolate_folds)
+
+# Create a specification
+tree_spec <- decision_tree() %>%
+  set_mode("regression") %>%
+  set_engine("rpart")
+
+# Fit all folds to the specification
+fits_cv <- fit_resamples(tree_spec,
+               final_grade~.,
+               resamples = chocolate_folds,
+               metrics = metric_set(mae, rmse))
+
+fits_cv
+
+library(ggplot2)
+
+# Collect the errors
+all_errors <- collect_metrics(fits_cv, summarize = FALSE)
+
+# Plot an error histogram
+ggplot(all_errors, aes(x = .estimate, fill = .metric)) +
+        geom_histogram()
+
+# Collect and print error statistics
+collect_metrics(fits_cv, summarize = TRUE)
+
+# Create a model having only one split
+chocolate_model <- decision_tree(tree_depth = 1) %>% 
+		set_mode("regression") %>%
+		set_engine("rpart") %>% 
+		fit(final_grade ~ ., data = chocolate_train)
+
+chocolate_model
+
+# Create a model with high cost for complexity
+chocolate_model <- decision_tree(cost_complexity = 0.1) %>% 
+		set_mode("regression") %>%
+		set_engine("rpart") %>% 
+		fit(final_grade ~ ., data = chocolate_train)
+
+chocolate_model
+
+# Create a model that can grow arbitrarily complex
+chocolate_model <- decision_tree(min_n = 2,
+			  					 cost_complexity = 0) %>%
+		set_mode("regression") %>%
+		set_engine("rpart") %>% 
+		fit(final_grade ~ ., data = chocolate_train)
+
+chocolate_model
+
+# Create a specification with tuning placeholders
+tune_spec <- decision_tree(tree_depth = tune(),cost_complexity = tune()) %>% 
+  # Specify mode
+  set_mode('classification') %>% 
+  # Specify engine
+  set_engine('rpart')
+
+print(tune_spec)
+
+# Create a specification with tuning placeholders
+tune_spec <- decision_tree(tree_depth = tune(),
+                           cost_complexity = tune()) %>% 
+  # Specify mode
+  set_mode("classification") %>%
+  # Specify engine
+  set_engine("rpart") 
+
+# Create a regular grid
+tree_grid <- grid_regular(parameters(tune_spec),
+                 levels = 2)
+
+print(tree_grid)
+
+set.seed(275)
+
+# Create CV folds of the customers tibble
+folds <- vfold_cv(customers, v = 3)
+
+# Tune along the grid
+tune_results <- tune_grid(tune_spec, 
+                          still_customer~.,
+                          resamples = folds, 
+                          grid = tree_grid,
+                          metrics = metric_set(accuracy))
+
+# Plot the tuning results
+autoplot(tune_results)
+
+# Select the parameters that perform best
+final_params <- select_best(tune_results)
+
+# Finalize the specification
+best_spec <- finalize_model(tune_spec, final_params)
+
+# Build the final model
+final_model <- fit(best_spec,
+                   still_customer ~ .,
+                   data = customers)
+
+final_model
+
+# Create CV folds of the training data
+folds <- vfold_cv(customers_train, v = 3)
+
+# Calculate CV specificity
+specificities <- fit_resamples(tree_spec, 
+still_customer~., resamples = folds, metrics = metric_set(spec))
+
+# Collect the metrics
+collect_metrics(specificities)
+
+# Predict probabilities on test set
+predictions <- predict(model, 
+                       customers_test, 
+                       type = "prob") %>% 
+  # Add test set
+  bind_cols(customers_test)
+
+# Calculate the ROC curve for all thresholds
+roc <- roc_curve(predictions,
+           estimate = .pred_yes, 
+           truth = still_customer)
+
+# Plot the ROC curve
+autoplot(roc)
+
+# Calculate area under the curve
+auc_result <- roc_auc(predictions, 
+                  estimate = .pred_yes, 
+                  truth = still_customer)
+
+print(paste("The area under the ROC curve is", round(auc_result$.estimate, 3)))
+
+# Create the specification
+library(baguette)
+
+spec_bagged <- bag_tree() %>%
+  set_mode("classification") %>%
+  set_engine("rpart", times = 20)
+
+# Fit to the training data
+model_bagged <- fit(spec_bagged,
+                    formula = still_customer~ total_trans_amt + customer_age + education_level, 
+                    data = customers_train)
+
+# Print the model
+model_bagged
+
+# Predict on training set and add to training set
+predictions <- predict(model_bagged, 
+                       customers_train, 
+                       type = "prob") %>% 
+  # Add test set
+  bind_cols(customers_train)
+
+# Create and plot the ROC curve
+roc_curve(predictions,
+           estimate = .pred_yes, 
+           truth = still_customer) %>% autoplot()
+
+# Calculate the AUC
+roc_auc(predictions, 
+                  estimate = .pred_yes, 
+                  truth = still_customer)
+
+set.seed(55)
+
+# Estimate AUC using cross-validation
+cv_results <- fit_resamples(spec_bagged,
+                            still_customer ~ total_trans_amt + customer_age + education_level, 
+                            resamples = vfold_cv(customers_train, v = 3),
+                            metrics = metric_set(roc_auc))
+ 
+# Collect metrics
+collect_metrics(cv_results)
+
+#What is the main difference between the two ensemble methods bagged trees and random forest?
+#In a random forest, only a subset of features is selected at random at each split in a decision tree. In bagging, all features are used.
+
+# Specify a random forest
+spec <- rand_forest() %>%
+	set_mode("classification") %>%
+    set_engine('ranger', importance = 'impurity')
+
+# Train the forest
+model <- spec %>%
+    fit(formula = still_customer~.,
+        data = customers_train)
+
+# Plot the variable importance
+vip::vip(model)
+
+#The terms bagging and boosting may sound similar, but these are two machine learning algorithms that follow different approaches. What is one of the main differences between bagged trees and boosted trees?
+#In contrast to bagged trees, boosted trees iteratively improve the model fit by considering past fits.
+
+# Specify the model class
+boost_spec <- boost_tree() %>%
+	# Set the mode
+	set_mode("classification") %>%
+	# Set the engine
+	set_engine('xgboost')
+
+boost_spec
+
+# Train the model on the training set
+boost_model <- fit(boost_spec,
+                   formula = still_customer~.,
+                   data = customers_train)
+
+boost_model
+
+set.seed(99)
+
+# Create CV folds
+folds <- vfold_cv(customers_train, v = 5)
+
+# Fit and evaluate models for all folds
+cv_results <- fit_resamples(boost_spec,
+			    			still_customer ~ ., 
+	                    	resamples = folds,
+	                    	metrics = metric_set(roc_auc))
+
+# Collect cross-validated metrics
+collect_metrics(cv_results)
+
+set.seed(100)
+
+# Specify, fit, predict, and combine with training data
+predictions <- boost_tree() %>%
+  set_mode("classification") %>%
+  set_engine("xgboost") %>% 
+  fit(still_customer ~ ., data = customers_train) %>%
+  predict(new_data = customers_train, type = "prob") %>% 
+  bind_cols(customers_train)
+
+# Calculate AUC
+roc_auc(predictions, 
+        truth = still_customer, 
+        estimate = .pred_yes)
+
+set.seed(100)
+
+# Specify, fit, predict and combine with training data
+predictions <- decision_tree() %>%
+  set_mode("classification") %>%
+  set_engine("rpart") %>% 
+  fit(still_customer ~ ., data = customers_train) %>%
+  predict(new_data = customers_train, type = "prob") %>% 
+  bind_cols(customers_train)
+
+# Calculate AUC
+roc_auc(predictions, 
+        truth = still_customer,
+        estimate = .pred_yes)
+
+# Create the specification with placeholders
+boost_spec <- boost_tree(
+                trees = 500,
+                learn_rate = tune(),
+                tree_depth = tune(),
+                sample_size = tune()) %>%
+  set_mode('classification') %>%
+  set_engine('xgboost')
+
+# Create the tuning grid
+tunegrid_boost <- grid_regular(parameters(boost_spec), 
+                      levels = 3)
+
+tunegrid_boost
+
+# Create CV folds of training data
+folds <- vfold_cv(customers_train, v = 6)
+
+# Tune along the grid
+tune_results <- tune_grid(boost_spec,
+                    still_customer ~ .,
+                    resamples = folds,
+                    grid = tunegrid_boost,
+                    metrics = metric_set(roc_auc))
+
+# Plot the results
+autoplot(tune_results)
+
+# Select the final hyperparameters
+best_params <- select_best(tune_results)
+
+# Finalize the specification
+final_spec <- finalize_model(boost_spec, best_params)
+
+# Train the final model on the full training data
+final_model <- final_spec %>% fit(formula = still_customer ~., data = customers_train)
+
+final_model
+
+# Calculate the AUC for each model
+auc_tree   <- roc_auc(preds_combined, truth = still_customer, estimate = preds_tree)
+auc_bagged <- roc_auc(preds_combined, truth = still_customer, estimate = preds_bagging)
+auc_forest <- roc_auc(preds_combined, truth = still_customer, estimate = preds_forest)
+auc_boost  <- roc_auc(preds_combined, truth = still_customer, estimate = preds_boosting)
+
+# Print the results
+auc_tree
+auc_bagged
+auc_forest
+auc_boost
+
+# Calculate the AUC for each model
+auc_tree   <- roc_auc(preds_combined, truth = still_customer, estimate = preds_tree)
+auc_bagged <- roc_auc(preds_combined, truth = still_customer, estimate = preds_bagging)
+auc_forest <- roc_auc(preds_combined, truth = still_customer, estimate = preds_forest)
+auc_boost  <- roc_auc(preds_combined, truth = still_customer, estimate = preds_boosting)
+
+# Combine AUCs into one tibble
+combined <- bind_rows(auc_tree,
+                auc_bagged,
+                auc_forest,
+                auc_boost)
+
+combined
+
+# Calculate the AUC for each model
+auc_tree   <- roc_auc(preds_combined, truth = still_customer, estimate = preds_tree)
+auc_bagged <- roc_auc(preds_combined, truth = still_customer, estimate = preds_bagging)
+auc_forest <- roc_auc(preds_combined, truth = still_customer, estimate = preds_forest)
+auc_boost  <- roc_auc(preds_combined, truth = still_customer, estimate = preds_boosting)
+
+# Combine AUCs into one tibble
+combined <- bind_rows(decision_tree = auc_tree,
+                      bagged_tree   = auc_bagged,
+                      random_forest = auc_forest,
+                      boosted_tree  = auc_boost,
+                      .id = "model")
+
+combined
+
+# Reshape the predictions into long format
+predictions_long <- tidyr::pivot_longer(preds_combined,
+                                        cols = starts_with("preds_"),
+                                        names_to = "model",
+                                        values_to = "predictions")
+
+predictions_long %>% 
+  # Group by model
+  group_by(model) %>% 
+  # Calculate values for every cutoff
+  roc_curve(truth = still_customer, 
+      estimate = predictions) %>%
+  # Create a plot from the calculated data
+  autoplot()
